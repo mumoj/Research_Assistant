@@ -7,8 +7,8 @@ from typing import List, Dict
 
 
 # Load environment variables
-os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
-os.environ["YOUTUBE_API_KEY"] = st.secrets["YOUTUBE_API_KEY"]
+#os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+#os.environ["YOUTUBE_API_KEY"] = st.secrets["YOUTUBE_API_KEY"]
 load_dotenv()
 
 # Set page config
