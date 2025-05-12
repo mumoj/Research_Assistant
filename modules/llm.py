@@ -3,7 +3,6 @@ import google.generativeai as genai
 import os
 from typing import List, Dict, Optional
 
-#Function to generate an answer using Gemini
 def generate_answer(question: str, web_sources: List[Dict[str, str]], youtube_sources: List[Dict[str, str]]) -> str:
     """
     Generates an answer to a question based on provided web and YouTube sources using the Gemini model.
