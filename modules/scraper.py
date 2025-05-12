@@ -2,10 +2,17 @@ import newspaper
 import requests
 from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
+from typing import List, Dict, Union
 
     
-# Function to extract content from web pages
-def extract_web_content(url):
+def extract_web_content(url: str) -> str:
+    """
+    Extracts the main content from a web page.
+    Args:
+        url: The URL of the web page.
+    Returns:
+        The extracted text content, or an error message if extraction fails.
+    """
     try:
         # Use newspaper3k to extract article content
         article = newspaper.Article(url)
@@ -13,17 +20,17 @@ def extract_web_content(url):
         article.parse()
     
         # Get the main text
-        text = article.text
+        text: str = article.text
     
         # If text is empty or very short, try BeautifulSoup as fallback
         if not text or len(text) < 100:
-            headers = {
+            headers: Dict[str, str] = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             }
-            response = requests.get(url, headers=headers, timeout=10)
+            response: requests.Response = requests.get(url, headers=headers, timeout=10)
             response.raise_for_status()
         
-            soup = BeautifulSoup(response.text, 'html.parser')
+            soup: BeautifulSoup = BeautifulSoup(response.text, 'html.parser')
             for script in soup(["script", "style"]):
                 script.extract()
             text = soup.get_text(separator='\n', strip=True)
@@ -35,13 +42,21 @@ def extract_web_content(url):
     except Exception as e:
         return f"Error extracting content from {url}: {str(e)}"
 
-# Function to get YouTube video transcript
-def get_video_transcript(video_id):
+def get_video_transcript(video_id: str) -> Union[List[Dict[str, str]], str]:
+    """
+    Retrieves the transcript of a YouTube video.
+    Args:
+        video_id: The ID of the YouTube video.
+    Returns:
+        A list of dictionaries representing the transcript, where each dictionary
+        contains 'text' and 'start' and 'duration', or an error message if
+        the transcript cannot be fetched.
+    """
     try:
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        transcript_list: YouTubeTranscriptApi = YouTubeTranscriptApi.get_transcript(video_id)
 
         # Process transcript to include timestamps
-        formatted_transcript = []
+        formatted_transcript: List[Dict[str, str]] = []
         for entry in transcript_list:
             start_time = entry['start']
             text = entry['text']
@@ -61,8 +76,15 @@ def get_video_transcript(video_id):
         return f"Error getting transcript: {str(e)}"
 
 
-# Function to format transcript into readable text
-def format_transcript_text(transcript):
+def format_transcript_text(transcript: List[Dict[str, str]]) -> str:
+    """
+    Formats a YouTube transcript into a single string.]
+    Args:
+        transcript: A list of transcript segments, where each segment is a
+                    dictionary containing atleast 'text', and 'timestamp'.
+    Returns:
+        A string containing the concatenated text of the transcript segments.
+    """
     if isinstance(transcript, str):  # Error message
         return transcript
 

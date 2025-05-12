@@ -3,14 +3,14 @@ from duckduckgo_search import DDGS
 import os
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from typing import List, Dict
 
 
-# Function to search web using DuckDuckGo
-def search_web(query, max_results=5):
+def search_web(query: str, max_results: int =5) -> List[Dict[str, str]]:
     try:
-        results = []
+        results: List[Dict[str, str]] = []
         with DDGS() as ddgs:
-            search_results = list(ddgs.text(query, max_results=max_results))
+            search_results: List[Dict[str, str]] = list(ddgs.text(query, max_results=max_results))
         
             for result in search_results:
                 results.append({
@@ -24,9 +24,19 @@ def search_web(query, max_results=5):
         st.error(f"Error searching the web: {str(e)}")
         return []
 
-    # Function to search YouTube
-def search_youtube(query, max_results=3):
-    youtube_api_key = os.getenv("YOUTUBE_API_KEY")
+def search_youtube(query: str, max_results: int = 3) -> List[Dict[str, str]]:
+    """
+    Searches YouTube using the YouTube Data API v3.
+    Args:
+        query: The search query.
+        max_results: The maximum number of search results to return.
+        
+    Returns:
+        A list of dictionaries, where each dictionary represents a video
+        and contains the 'id', 'title', and 'url'. Returns an empty list if
+        the YouTube API key is missing or if there are no results.
+    """
+    youtube_api_key: str = os.getenv("YOUTUBE_API_KEY")
     if not youtube_api_key:
         st.error("YouTube API Key not found in environment variables")
         return []
@@ -42,7 +52,7 @@ def search_youtube(query, max_results=3):
             type='video'
         ).execute()
     
-        videos = []
+        videos: List[Dict[str, str]] = []
         for search_result in search_response.get('items', []):
             if search_result['id']['kind'] == 'youtube#video':
                 video_id = search_result['id']['videoId']
