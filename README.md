@@ -93,6 +93,4 @@ This project uses several open-source libraries and tools:
 #### XML Processing
 - [lxml](https://lxml.de/): XML and HTML processing
 
-## 📄 License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
