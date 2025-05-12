@@ -7,8 +7,6 @@ from typing import List, Dict
 
 
 # Load environment variables
-#os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
-#os.environ["YOUTUBE_API_KEY"] = st.secrets["YOUTUBE_API_KEY"]
 load_dotenv()
 
 # Set page config
@@ -110,9 +108,12 @@ if ask_button and question:
         with st.expander("Debug Information"):
             st.json(all_results)
             
+            st.write(f"Sources as Per LLM: {sources_section}")
+            
             # Show number of sources
             st.write(f"Web sources: {len(web_sources)}")
             st.write(f"YouTube sources: {len(youtube_sources)}")
+            
             
             # Show prompt used
             st.markdown("### Prompt Template")
@@ -127,7 +128,7 @@ if ask_button and question:
         INSTRUCTIONS:
         1. Answer the question directly and concisely based only on the information in the sources.
         2. Use numbered citations in square brackets [1], [2], etc. after every statement that uses information from the sources.
-        3. In the case of multiple citations for one statement, list them as [1],[2] not [1, 2].
+        3. In the case of multiple citations for one statement, list them one after another like [1],[2] not [1, 2].
         4. For YouTube sources, include the timestamp in the citation like [3][02:15] where 02:15 is the timestamp of the relevant information.
         5. If the sources don't contain enough information to answer the question, state this clearly.
         6. End your answer with a "SOURCES:" section that lists all the sources you cited.
