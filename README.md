@@ -8,8 +8,8 @@ An app that answers questions using content from both the web and YouTube videos
 git clone https://github.com/mumoj/Research_Assistant.git
 cd Research_Assistant
 cp .env.example .env  # Add your API keys
-pip install -r requirements.txt
-streamlit run main.py
+docker built -t ask-qa .
+docker run -p 8501:8501 ask-qa
 ```
 
 ## Architecture
@@ -65,6 +65,6 @@ A structured prompt that explicitly instructs the LLM to cite sources with numbe
 
 - DuckDuckGo search may be less comprehensive than commercial search APIs
 - YouTube transcript availability varies across videos
-- Answers are limited by the quality and relevance of top search results
+- Answers are depended on the Gemini LLM and by the quality and relevance of top search results
 - Large videos/pages may be truncated to fit token limits
 - API rate limits may apply when handling many requests
