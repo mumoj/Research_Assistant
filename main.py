@@ -7,6 +7,8 @@ from typing import List, Dict
 
 
 # Load environment variables
+os.environ["GEMINI_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+os.environ["YOUTUBE_API_KEY"] = st.secrets["YOUTUBE_API_KEY"]
 load_dotenv()
 
 # Set page config
@@ -91,13 +93,9 @@ if ask_button and question:
             "youtube_results": youtube_results
         }
         
-        # Generate the answer
         answer: str = llm.generate_answer(question, web_sources, youtube_sources)
-        
-        # Process citations
         processed_answer, sources_section, earliest_timestamps = citations.process_citations(answer, web_sources, youtube_sources)
-        
-        # Create the sources list
+
         sources_html: str = citations.create_sources_list(web_sources, youtube_sources, earliest_timestamps)
     
     # Display the answer
