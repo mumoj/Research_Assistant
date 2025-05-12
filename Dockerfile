@@ -1,4 +1,4 @@
-FROM python:3.10-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -13,4 +13,4 @@ COPY . .
 EXPOSE 8501
 
 # Set environment variables from .env file at runtime
-CMD ["sh", "-c", "if [ -f .env ]; then export $(grep -v '^#' .env | xargs); fi && streamlit run research_assistant.py --server.port=8501 --server.address=0.0.0.0"]
+CMD ["sh", "-c", "if [ -f .env ]; then export $(grep -v '^#' .env | xargs); fi && streamlit run main.py --server.port=8501 --server.address=0.0.0.0"]

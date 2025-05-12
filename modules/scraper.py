@@ -14,7 +14,6 @@ def extract_web_content(url: str) -> str:
         The extracted text content, or an error message if extraction fails.
     """
     try:
-        # Use newspaper3k to extract article content
         article = newspaper.Article(url)
         article.download()
         article.parse()
