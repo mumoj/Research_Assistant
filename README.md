@@ -68,3 +68,28 @@ A structured prompt that explicitly instructs the LLM to cite sources with numbe
 - Answers are depended on the Gemini LLM and by the quality and relevance of top search results
 - Large videos/pages may be truncated to fit token limits
 - API rate limits may apply when handling many requests
+
+## Third-Party Libraries and Tools Acknowledgments
+
+This project uses several open-source libraries and tools:
+
+#### Web Scraping and Content Extraction
+- [Newspaper3k](https://newspaper.readthedocs.io/en/latest/): Article scraping and parsing
+- [BeautifulSoup4](https://www.crummy.com/software/BeautifulSoup/): HTML parsing
+- [Requests](https://docs.python-requests.org/): HTTP requests
+#### Search
+- [DuckDuckGo Search](https://pypi.org/project/duckduckgo-search/): Web search functionality
+- [Google API Python Client](https://github.com/googleapis/google-api-python-client): YouTube Data API integration
+#### Transcription
+- [YouTube Transcript API](https://pypi.org/project/youtube-transcript-api/): YouTube video transcript extraction
+#### Machine Learning and AI
+- [Google Generative AI](https://ai.google.dev/): Gemini language model for answer generation
+#### Web Framework
+- [Streamlit](https://streamlit.io/): Interactive web application framework
+#### Development and Testing
+- [Pytest](https://docs.pytest.org/): Testing framework
+#### Environment and Configuration
+- [Python-dotenv](https://pypi.org/project/python-dotenv/): Environment variable management
+#### XML Processing
+- [lxml](https://lxml.de/): XML and HTML processing
+
