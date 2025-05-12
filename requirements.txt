@@ -1,0 +1,11 @@
+streamlit
+requests
+beautifulsoup4
+google-api-python-client
+youtube-transcript-api
+openai
+python-dotenv
+newspaper3k
+duckduckgo-search
+pytest
+google-generativeai
