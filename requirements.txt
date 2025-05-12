@@ -9,3 +9,4 @@ newspaper3k
 duckduckgo-search
 pytest
 google-generativeai
+lxml[html_clean]
