@@ -1,1 +1,69 @@
-# RESEARCH_ASSISTANT
+# Ask the Web & YouTube
+
+An app that answers questions using content from both the web and YouTube videos, with proper citations.
+
+## Setup
+
+```
+git clone https://github.com/mumoj/Research_Assistant.git
+cd Research_Assistant
+cp .env.example .env  # Add your API keys
+pip install -r requirements.txt
+streamlit run main.py
+```
+
+## Architecture
+
+```
+User Question
+    ↓
+┌─────────────────┐   ┌────────────────┐
+│ Web Search      │   │ YouTube Search │
+│ (DuckDuckGo)    │   │ (YouTube API)  │
+└────────┬────────┘   └────────┬───────┘
+         │                     │
+         ▼                     ▼
+┌─────────────────┐   ┌────────────────┐
+│ Content         │   │ Transcript     │
+│ Extraction      │   │ Extraction     │
+└────────┬────────┘   └────────┬───────┘
+         │                     │
+         └─────────┬───────────┘
+                   ↓
+         ┌───────────────────┐
+         │ LLM Processing    │
+         │ (Answer + Cite)   │
+         └────────┬──────────┘
+                  ↓
+         ┌───────────────────┐
+         │ Streamlit UI      │
+         └───────────────────┘
+```
+
+## LLM Prompt Approach
+    Answer the following question based ONLY on the provided sources:
+            
+    QUESTION: {question}
+            
+    SOURCES:
+    {sources}
+            
+    INSTRUCTIONS:
+      1. Answer the question directly and concisely based only on the information in the sources.
+      2. Use numbered citations in square brackets [1], [2], etc. after every statement that uses information from the sources.
+      3. For YouTube sources, include the timestamp in the citation like [3][02:15] where 02:15 is the timestamp of the relevant information.
+      4. If the sources don't contain enough information to answer the question, state this clearly.
+      5. End your answer with a "SOURCES:" section that lists all the sources you cited.
+      6. For YouTube sources in the SOURCES section, include the title and URL with timestamp of the earliest reference.
+      7. For web sources, include the title and URL.
+      8. If you use multiple timestamps from the same video, list the earliest one in the SOURCES section.
+
+A structured prompt that explicitly instructs the LLM to cite sources with numbered references and include timestamps for YouTube content, ensuring precise attribution.
+
+## Known Limitations
+
+- DuckDuckGo search may be less comprehensive than commercial search APIs
+- YouTube transcript availability varies across videos
+- Answers are limited by the quality and relevance of top search results
+- Large videos/pages may be truncated to fit token limits
+- API rate limits may apply when handling many requests
