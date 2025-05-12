@@ -3,16 +3,12 @@ import sys
 import os
 import re
 from unittest.mock import patch, MagicMock
+from modules.citations import process_citations
+from modules.scraper import get_video_transcript, format_transcript_text
 
 # Add the parent directory to sys.path to import the app
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import functions from the main app
-from research_assistant import (
-    get_video_transcript,
-    format_transcript_text,
-    process_citations
-)
 
 class TestTranscriptExtraction:
     
@@ -84,3 +80,4 @@ class TestCitationParsing:
         minutes, seconds = map(int, timestamp.split(':'))
         total_seconds = minutes * 60 + seconds
         assert total_seconds == 90
+        
