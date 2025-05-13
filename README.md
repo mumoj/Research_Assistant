@@ -8,7 +8,7 @@ An app that answers questions using content from both the web and YouTube videos
 git clone https://github.com/mumoj/Research_Assistant.git
 cd Research_Assistant
 cp .env.example .env  # Add your API keys
-docker built -t ask-qa .
+docker build -t ask-qa .
 docker run -p 8501:8501 ask-qa
 ```
 
