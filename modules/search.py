@@ -31,11 +31,11 @@ def search_web(query: str, max_results: int =5) -> List[Dict[str, str]]:
         return results
     
     except Exception as e:
-        st.warning("DuckDuckGo failed(e) \n Trying SerpAPI...")
+        st.warning(f"DuckDuckGo failed: {str(e)} Trying SerpAPI...")
         try:
             return search_with_serpapi(query, max_results)
         except Exception as e:
-            st.error("SerpAPI search failed: {str(e)}")
+            st.error(f"SerpAPI search failed: {str(e)}")
             return []
     
 def search_with_serpapi(query: str, max_results: int = 5) -> List[Dict[str, str]]:
