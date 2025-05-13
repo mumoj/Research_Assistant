@@ -1,12 +1,22 @@
 import streamlit as st
-from duckduckgo_search import DDGS
+import requests
 import os
+from duckduckgo_search import DDGS
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from typing import List, Dict
 
 
 def search_web(query: str, max_results: int =5) -> List[Dict[str, str]]:
+    """
+    Search the web using DuckDuckGo with SerpAPI as a backup
+    Args:
+        query: The search query
+        max_results: Maximum number of results to return
+        
+    Returns:
+        List of dictionaries containing search results
+    """
     try:
         results: List[Dict[str, str]] = []
         with DDGS() as ddgs:
@@ -21,8 +31,47 @@ def search_web(query: str, max_results: int =5) -> List[Dict[str, str]]:
         return results
     
     except Exception as e:
-        st.error(f"Error searching the web: {str(e)}")
-        return []
+        st.warning("DuckDuckGo failed(e) \n Trying SerpAPI...")
+        try:
+            return search_with_serpapi(query, max_results)
+        except Exception as e:
+            st.error("SerpAPI search failed: {str(e)}")
+            return []
+    
+def search_with_serpapi(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    """
+    Search the web using SerpAPI
+    
+    Args:
+        query: The search query
+        max_results: Maximum number of results to return
+    Returns:
+        List of dictionaries containing search results
+    """
+    results = []
+    serpapi_key = os.environ.get("SerpAPI_KEY")
+    if not serpapi_key:
+        st.error("SerpAPI key not found. Set the SerpAPI environment variable.")
+        return results
+    
+    params = {
+        "q": query,
+        "api_key": serpapi_key,
+        "engine": "google",
+        "num": max_results
+    }
+    response = requests.get("https://serpapi.com/search", params=params)
+    data = response.json()
+    if "organic_results" in data:
+        for result in data["organic_results"][:max_results]:
+            results.append({
+                "title": result.get("title", "No title"),
+                "url": result.get("link", ""),
+                "snippet": result.get("snippet", "No snippet")
+            })
+    
+    return results
+
 
 def search_youtube(query: str, max_results: int = 3) -> List[Dict[str, str]]:
     """
@@ -48,7 +97,7 @@ def search_youtube(query: str, max_results: int = 3) -> List[Dict[str, str]]:
         search_response = youtube.search().list(
             q=query,
             part='id,snippet',
-            maxResults=max_results * 3,
+            maxResults=max_results * 2,
             type='video'
         ).execute()
     
