@@ -33,9 +33,11 @@ with st.sidebar:
     # Debug expandable section
     with st.expander("Debug Settings"):
         show_debug: bool = st.checkbox("Show Debug Info", value=False)
-        st.write("API Keys status:")
-        st.write(f"Gemini API Key: {'✅ Set' if os.getenv('GEMINI_API_KEY') else '❌ Missing'}")
+        st.write("API Keys statuses:")
+        st.write(f"Gemini API Key:  {'✅ Set' if os.getenv('GEMINI_API_KEY') else '❌ Missing'}")
         st.write(f"YouTube API Key: {'✅ Set' if os.getenv('YOUTUBE_API_KEY') else '❌ Missing'}")
+        st.write(f"SerpAPI Key:     {'✅ Set' if os.getenv('SerpAPI_KEY') else '❌ Missing'}")
+        
 
 # Main input form
 question: str = st.text_input("Ask a question:")
