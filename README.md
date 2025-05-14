@@ -79,6 +79,7 @@ This project uses several open-source libraries and tools:
 - [Requests](https://docs.python-requests.org/): HTTP requests
 #### Search
 - [DuckDuckGo Search](https://pypi.org/project/duckduckgo-search/): Web search functionality
+- [SerpAPI Python Client](https://github.com/serpapi/google-search-results-python) : Back up web search functionality
 - [Google API Python Client](https://github.com/googleapis/google-api-python-client): YouTube Data API integration
 #### Transcription
 - [YouTube Transcript API](https://pypi.org/project/youtube-transcript-api/): YouTube video transcript extraction
