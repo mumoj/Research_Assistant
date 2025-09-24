@@ -30,7 +30,7 @@ class ValidationResult(BaseModel):
     """Model for validation results."""
     status: str
     issues: str
-    confidence: intpa
+    confidence: int
     recommendations: str
 
 
