@@ -68,6 +68,19 @@ class LLMConfig:
                 google_api_key=api_key
             )
         
+        elif provider.lower() == "groq":
+            api_key = os.getenv("GROQ_API_KEY")
+            if not api_key:
+                raise ValueError("GROQ_API_KEY not found in environment")
+            
+            model_name = model or os.getenv("VALIDATOR_MODEL", "llama-3.1-70b-versatile")
+            return ChatOpenAI(
+                model=model_name,
+                temperature=0.0,
+                api_key=api_key,
+                base_url="https://api.groq.com/openai/v1"
+            )
+        
         else:
             raise ValueError(f"Unsupported provider: {provider}")
     
@@ -77,7 +90,8 @@ class LLMConfig:
         return {
             "openai": ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
             "anthropic": ["claude-haiku", "claude-sonnet", "claude-opus"],
-            "gemini": ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"]
+            "gemini": ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
+            "groq": ["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
         }
     
     @staticmethod
@@ -87,6 +101,7 @@ class LLMConfig:
             "gemini": bool(os.getenv("GEMINI_API_KEY")),
             "openai": bool(os.getenv("OPENAI_API_KEY")),
             "anthropic": bool(os.getenv("ANTHROPIC_API_KEY")),
+            "groq": bool(os.getenv("GROQ_API_KEY")),
             "youtube": bool(os.getenv("YOUTUBE_API_KEY")),
             "serpapi": bool(os.getenv("SERPAPI_KEY"))
         }
