@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
-from langchain.schema import BaseLanguageModel
+from langchain_core.language_models import BaseLanguageModel
 
 
 class LLMConfig:
