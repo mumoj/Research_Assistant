@@ -4,10 +4,11 @@ import os
 from duckduckgo_search import DDGS
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from typing import List, Dict
+from typing import List
+from .workflow_state import SearchResult
 
 
-def search_web(query: str, max_results: int =5) -> List[Dict[str, str]]:
+def search_web(query: str, max_results: int = 5) -> List[SearchResult]:
     """
     Search the web using DuckDuckGo with SerpAPI as a backup
     Args:
@@ -18,16 +19,16 @@ def search_web(query: str, max_results: int =5) -> List[Dict[str, str]]:
         List of dictionaries containing search results
     """
     try:
-        results: List[Dict[str, str]] = []
+        results: List[SearchResult] = []
         with DDGS() as ddgs:
-            search_results: List[Dict[str, str]] = list(ddgs.text(query, max_results=max_results))
+            search_results = list(ddgs.text(query, max_results=max_results))
         
             for result in search_results:
-                results.append({
-                    "title": result.get("title", "No title"),
-                    "url": result.get("href", ""),
-                    "snippet": result.get("body", "No snippet")
-                })
+                results.append(SearchResult(
+                    title=result.get("title", "No title"),
+                    url=result.get("href", ""),
+                    snippet=result.get("body", "No snippet")
+                ))
         return results
     
     except Exception as e:
@@ -37,7 +38,7 @@ def search_web(query: str, max_results: int =5) -> List[Dict[str, str]]:
             st.error(f"SerpAPI search failed: {str(e)}")
             return []
     
-def search_with_serpapi(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+def search_with_serpapi(query: str, max_results: int = 5) -> List[SearchResult]:
     """
     Search the web using SerpAPI
     
@@ -72,7 +73,7 @@ def search_with_serpapi(query: str, max_results: int = 5) -> List[Dict[str, str]
     return results
 
 
-def search_youtube(query: str, max_results: int = 3) -> List[Dict[str, str]]:
+def search_youtube(query: str, max_results: int = 3) -> List[SearchResult]:
     """
     Searches YouTube using the YouTube Data API v3.
     Args:
@@ -100,7 +101,7 @@ def search_youtube(query: str, max_results: int = 3) -> List[Dict[str, str]]:
             type='video'
         ).execute()
     
-        videos: List[Dict[str, str]] = []
+        videos: List[SearchResult] = []
         for search_result in search_response.get('items', []):
             if search_result['id']['kind'] == 'youtube#video':
                 video_id = search_result['id']['videoId']
@@ -117,11 +118,11 @@ def search_youtube(query: str, max_results: int = 3) -> List[Dict[str, str]]:
                     title = search_result['snippet']['title']
                     video_url = f"https://www.youtube.com/watch?v={video_id}"
                     
-                    videos.append({
-                        'id': video_id,
-                        'title': title,
-                        'url': video_url
-                    })
+                    videos.append(SearchResult(
+                        title=title,
+                        url=video_url,
+                        snippet=video_id
+                    ))
                     
                     if len(videos) >= max_results:
                         break
