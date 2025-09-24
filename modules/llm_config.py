@@ -73,7 +73,7 @@ class LLMConfig:
             if not api_key:
                 raise ValueError("GROQ_API_KEY not found in environment")
             
-            model_name = model or os.getenv("VALIDATOR_MODEL", "llama-3.1-70b-versatile")
+            model_name = model or os.getenv("VALIDATOR_MODEL", "llama-3.3-70b-versatile")
             return ChatOpenAI(
                 model=model_name,
                 temperature=0.0,
@@ -91,7 +91,7 @@ class LLMConfig:
             "openai": ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"],
             "anthropic": ["claude-haiku", "claude-sonnet", "claude-opus"],
             "gemini": ["gemini-pro", "gemini-1.5-flash", "gemini-1.5-pro"],
-            "groq": ["llama-3.1-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
+            "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"]
         }
     
     @staticmethod
