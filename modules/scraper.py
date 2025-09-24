@@ -2,7 +2,8 @@ import newspaper
 import requests
 from bs4 import BeautifulSoup
 from youtube_transcript_api import YouTubeTranscriptApi
-from typing import List, Dict, Union
+from typing import List, Union
+from .workflow_state import YouTubeSource, WebSource
 
     
 def extract_web_content(url: str) -> str:
@@ -41,7 +42,7 @@ def extract_web_content(url: str) -> str:
     except Exception as e:
         return f"Error extracting content from {url}: {str(e)}"
 
-def get_video_transcript(video_id: str) -> Union[List[Dict[str, str]], str]:
+def get_video_transcript(video_id: str) -> Union[List[dict], str]:
     """
     Retrieves the transcript of a YouTube video.
     Args:
@@ -55,7 +56,7 @@ def get_video_transcript(video_id: str) -> Union[List[Dict[str, str]], str]:
         transcript_list: YouTubeTranscriptApi = YouTubeTranscriptApi.get_transcript(video_id)
 
         # Process transcript to include timestamps
-        formatted_transcript: List[Dict[str, str]] = []
+        formatted_transcript: List[dict] = []
         for entry in transcript_list:
             start_time = entry['start']
             text = entry['text']
@@ -75,7 +76,7 @@ def get_video_transcript(video_id: str) -> Union[List[Dict[str, str]], str]:
         return f"Error getting transcript: {str(e)}"
 
 
-def format_transcript_text(transcript: List[Dict[str, str]]) -> str:
+def format_transcript_text(transcript: List[dict]) -> str:
     """
     Formats a YouTube transcript into a single string.]
     Args:
