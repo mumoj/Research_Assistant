@@ -1,6 +1,6 @@
 """LangGraph workflow nodes for research assistant."""
 from typing import Dict, Any, List
-from langgraph import StateGraph, END
+from langgraph.graph import StateGraph, END
 from .workflow_state import ResearchState, SearchResult, WebSource, YouTubeSource, ValidationResult
 from .llm_config import LLMConfig
 from .prompts import ANSWER_GENERATION_PROMPT, FACT_CHECK_PROMPT, ANSWER_REVISION_PROMPT, format_validation_response
