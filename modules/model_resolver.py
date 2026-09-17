@@ -124,3 +124,27 @@ def is_model_not_found(error: BaseException) -> bool:
     if "404" in text or "not_found" in text or "not found" in text:
         return True
     return "model" in text and ("does not exist" in text or "no longer available" in text)
+
+
+# Phrases meaning "this model exists but your key may not spend on it".
+_BILLING_MARKERS = (
+    "permission_denied", "billing", "paid tier", "free tier",
+    "requires a paid", "not available on the free",
+)
+
+
+def is_billing_gated(error: BaseException) -> bool:
+    """Detect a model that needs billing this account has not enabled.
+
+    A plain 429 is deliberately NOT treated as billing-gated: that is transient
+    throttling, and switching models would mask it rather than fix it.
+    """
+    text = str(error).lower()
+    if "403" in text or "permission_denied" in text:
+        return True
+    return any(marker in text for marker in _BILLING_MARKERS)
+
+
+def is_model_unusable(error: BaseException) -> bool:
+    """True when the fix is to try a different model rather than give up."""
+    return is_model_not_found(error) or is_billing_gated(error)

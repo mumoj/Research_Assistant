@@ -18,15 +18,21 @@ class ValidatorUnavailable(RuntimeError):
 # auto-detection preference when the configured provider has no key.
 # A default model of None means "resolve it at runtime".
 #
-# Validation is a deterministic, high-volume fact-check, so each default is that
-# provider's cheap/fast tier rather than its flagship. Checked against provider
-# docs on 2026-09-17 - see get_available_providers for the current alternatives.
+# Ordered free tiers first, so auto-detection never reaches for a provider that
+# bills by default. Groq and Gemini both have no-cost tiers; OpenAI and
+# Anthropic require credit and are only used when named explicitly via
+# VALIDATOR_PROVIDER. Each default is the provider's cheap/fast tier, since
+# validation is a deterministic high-volume check. Checked 2026-09-17.
 VALIDATOR_PROVIDERS: List[Tuple[str, str, Optional[str]]] = [
-    ("openai", "OPENAI_API_KEY", "gpt-5.6-luna"),
     ("groq", "GROQ_API_KEY", "openai/gpt-oss-120b"),
-    ("anthropic", "ANTHROPIC_API_KEY", "claude-haiku-4-5-20251001"),
     ("gemini", "GEMINI_API_KEY", None),
+    ("openai", "OPENAI_API_KEY", "gpt-5.6-luna"),
+    ("anthropic", "ANTHROPIC_API_KEY", "claude-haiku-4-5-20251001"),
 ]
+
+# Providers that bill from the first request. Auto-detection skips these; they
+# are used only when VALIDATOR_PROVIDER names them.
+PAID_PROVIDERS = frozenset({"openai", "anthropic"})
 
 _PROVIDER_DEFAULTS: Dict[str, Tuple[str, Optional[str]]] = {
     name: (env, default) for name, env, default in VALIDATOR_PROVIDERS
@@ -68,7 +74,7 @@ class LLMConfig:
                 response = llm.invoke(prompt)
                 return response.content if hasattr(response, "content") else str(response)
             except Exception as exc:
-                if not model_resolver.is_model_not_found(exc):
+                if not model_resolver.is_model_unusable(exc):
                     raise
                 last_error = exc
                 if not model_name:
@@ -78,9 +84,15 @@ class LLMConfig:
         raise last_error if last_error else RuntimeError("No usable Gemini model")
 
     @staticmethod
-    def detect_validator_provider() -> Optional[str]:
-        """Return the first validator provider that has an API key configured."""
+    def detect_validator_provider(include_paid: bool = False) -> Optional[str]:
+        """Return the first free-tier provider that has an API key configured.
+
+        Paid providers are skipped unless explicitly requested, so a stray
+        OPENAI_API_KEY in the environment never silently starts spending.
+        """
         for provider, env_var, _ in VALIDATOR_PROVIDERS:
+            if provider in PAID_PROVIDERS and not include_paid:
+                continue
             if os.getenv(env_var):
                 return provider
         return None
