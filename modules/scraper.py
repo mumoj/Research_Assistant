@@ -42,6 +42,27 @@ def extract_web_content(url: str) -> str:
     except Exception as e:
         return f"Error extracting content from {url}: {str(e)}"
 
+def _fetch_raw_transcript(video_id: str) -> List[dict]:
+    """Fetch a transcript as a list of ``{text, start, duration}`` dicts.
+
+    youtube-transcript-api 1.0 replaced the static ``get_transcript`` with an
+    instance-based ``fetch``. Support both so the app works whichever version
+    the deployment resolves to.
+    """
+    fetch = getattr(YouTubeTranscriptApi, "get_transcript", None)
+    if callable(fetch):  # legacy (<1.0) static API
+        return fetch(video_id)
+
+    fetched = YouTubeTranscriptApi().fetch(video_id)
+    to_raw = getattr(fetched, "to_raw_data", None)
+    if callable(to_raw):
+        return to_raw()
+    return [
+        {"text": snippet.text, "start": snippet.start, "duration": snippet.duration}
+        for snippet in fetched
+    ]
+
+
 def get_video_transcript(video_id: str) -> Union[List[dict], str]:
     """
     Retrieves the transcript of a YouTube video.
@@ -53,7 +74,7 @@ def get_video_transcript(video_id: str) -> Union[List[dict], str]:
         the transcript cannot be fetched.
     """
     try:
-        transcript_list: YouTubeTranscriptApi = YouTubeTranscriptApi.get_transcript(video_id)
+        transcript_list: List[dict] = _fetch_raw_transcript(video_id)
 
         # Process transcript to include timestamps
         formatted_transcript: List[dict] = []

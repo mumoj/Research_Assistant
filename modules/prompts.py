@@ -1,5 +1,5 @@
 """All prompt templates for the research workflow."""
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 
 ANSWER_GENERATION_PROMPT = ChatPromptTemplate.from_template("""

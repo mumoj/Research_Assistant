@@ -3,6 +3,7 @@ import google.generativeai as genai
 import os
 from typing import List, Optional
 from .workflow_state import WebSource, YouTubeSource
+from .model_resolver import resolve_gemini_model
 
 def generate_answer(question: str, web_sources: List[WebSource], youtube_sources: List[YouTubeSource]) -> str:
     """
@@ -62,7 +63,7 @@ def generate_answer(question: str, web_sources: List[WebSource], youtube_sources
         """
     
         
-        model: genai.GenerativeModel = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model: genai.GenerativeModel = genai.GenerativeModel(resolve_gemini_model(gemini_api_key))
         response: genai.types.GenerateContentResponse = model.generate_content(
             [
                 {"role": "user", "parts": [{"text": prompt}]}

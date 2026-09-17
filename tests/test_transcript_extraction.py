@@ -26,10 +26,10 @@ class TestTranscriptExtraction:
         error_msg = "Error getting transcript: Video unavailable"
         assert format_transcript_text(error_msg) == error_msg
     
-    @patch('youtube_transcript_api.YouTubeTranscriptApi.get_transcript')
-    def test_get_video_transcript(self, mock_get_transcript):
+    @patch('modules.scraper._fetch_raw_transcript')
+    def test_get_video_transcript(self, mock_fetch):
         # Mock the transcript API response
-        mock_get_transcript.return_value = [
+        mock_fetch.return_value = [
             {'text': 'Hello world', 'start': 10.5, 'duration': 2.0},
             {'text': 'This is a test', 'start': 15.2, 'duration': 1.8}
         ]
