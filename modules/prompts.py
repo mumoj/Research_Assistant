@@ -88,29 +88,62 @@ QUALITY_SCORE: [1-10]
 FEEDBACK: [Brief assessment]
 """)
 
+# The RESPONSE FORMAT above writes each field as ``LABEL: [placeholder]``, where
+# the brackets mark a slot to fill rather than punctuation to reproduce. Models
+# read it that way and answer ``VALIDATION_STATUS: NEEDS_REVISION``, so a parser
+# that required literal brackets matched nothing and every field came back
+# "Unknown" -- which silently made validation a no-op. Brackets are optional now.
+_FIELD_LABELS = ("VALIDATION_STATUS", "ISSUES_FOUND",
+                 "CONFIDENCE_SCORE", "RECOMMENDED_CHANGES")
+
+_STATUSES = ("NEEDS_REVISION", "APPROVED", "REJECTED")
+
+
+def _field_pattern(label: str) -> str:
+    """Match one labelled field up to the next label or the end of the text.
+
+    Stopping at the next label rather than at the first ``]`` matters: the
+    issues a validator reports routinely quote citations like [1], which would
+    otherwise cut the value short.
+    """
+    others = "|".join(other for other in _FIELD_LABELS if other != label)
+    return (
+        rf"\*{{0,2}}{label}\*{{0,2}}\s*:\s*\**"
+        rf"(.*?)"
+        rf"(?=\n\s*\*{{0,2}}(?:{others})\*{{0,2}}\s*:|\Z)"
+    )
+
+
+def _unwrap(value: str) -> str:
+    """Strip markdown emphasis and one enclosing pair of brackets."""
+    value = value.strip().strip("*").strip()
+    if value.startswith("[") and value.endswith("]"):
+        value = value[1:-1].strip()
+    return value
+
+
 def format_validation_response(response_text: str) -> dict:
     """Parse structured validation response into dictionary."""
     import re
-    
-    patterns = {
-        "status": r"VALIDATION_STATUS:\s*\[([^\]]+)\]",
-        "issues": r"ISSUES_FOUND:\s*\[([^\]]+)\]",
-        "confidence": r"CONFIDENCE_SCORE:\s*\[(\d+)\]",
-        "recommendations": r"RECOMMENDED_CHANGES:\s*\[([^\]]+)\]"
-    }
-    
+
     result = {}
-    for key, pattern in patterns.items():
-        match = re.search(pattern, response_text, re.IGNORECASE | re.DOTALL)
-        if match:
-            result[key] = match.group(1).strip()
-        else:
-            result[key] = "Unknown"
-    
-    # Convert confidence to integer
-    try:
-        result["confidence"] = int(result.get("confidence", "0"))
-    except ValueError:
-        result["confidence"] = 0
-    
+    for key, label in zip(
+        ("status", "issues", "confidence", "recommendations"), _FIELD_LABELS
+    ):
+        match = re.search(_field_pattern(label), response_text or "",
+                          re.IGNORECASE | re.DOTALL)
+        value = _unwrap(match.group(1)) if match else ""
+        result[key] = value or "Unknown"
+
+    # The status drives the revision loop, so reduce it to one of the three
+    # keywords wherever it appears -- "NEEDS_REVISION (see below)" still counts.
+    status_text = result["status"].upper()
+    result["status"] = next(
+        (name for name in _STATUSES if name in status_text), "Unknown"
+    )
+
+    # Confidence may arrive as "35", "[35]", "35/100" or "35 - fairly sure".
+    confidence = re.search(r"\d+", result.get("confidence", ""))
+    result["confidence"] = int(confidence.group()) if confidence else 0
+
     return result

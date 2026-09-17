@@ -5,7 +5,22 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from typing import List, Union
 from .workflow_state import YouTubeSource, WebSource
 
-    
+# Sources are fetched concurrently, so a host that never responds no longer
+# blocks the others -- but without a timeout it would still hold the whole node
+# open until the pool drains. newspaper's default is 7s; make it explicit and
+# match the BeautifulSoup fallback below.
+SCRAPE_TIMEOUT_SECONDS = 10
+
+
+def _scrape_config() -> "newspaper.Config":
+    config = newspaper.Config()
+    config.request_timeout = SCRAPE_TIMEOUT_SECONDS
+    return config
+
+
+_SCRAPE_CONFIG = _scrape_config()
+
+
 def extract_web_content(url: str) -> str:
     """
     Extracts the main content from a web page.
@@ -15,7 +30,7 @@ def extract_web_content(url: str) -> str:
         The extracted text content, or an error message if extraction fails.
     """
     try:
-        article = newspaper.Article(url)
+        article = newspaper.Article(url, config=_SCRAPE_CONFIG)
         article.download()
         article.parse()
     

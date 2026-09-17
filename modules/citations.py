@@ -1,6 +1,27 @@
 import re
 from typing import List, Dict, Tuple, Optional, Union
 
+# Models differ in which bracket glyphs they emit for citations. The prompt asks
+# for ASCII [1], but Groq's gpt-oss models answer with the CJK forms 【1】 and
+# some models use fullwidth ［1］. Those read identically to a human but never
+# matched the citation regex, so the links silently stopped being generated.
+# Normalising the glyphs keeps one citation format downstream.
+_BRACKET_EQUIVALENTS = {
+    "\u3010": "[", "\u3011": "]",    # 【 】 CJK lenticular
+    "\uff3b": "[", "\uff3d": "]",    # ［ ］ fullwidth square
+    "\u2985": "[", "\u2986": "]",    # ⦅ ⦆ white parenthesis
+}
+
+_BRACKET_RE = re.compile("|".join(map(re.escape, _BRACKET_EQUIVALENTS)))
+
+
+def normalize_citation_brackets(text: str) -> str:
+    """Rewrite non-ASCII citation brackets to [ and ]."""
+    if not text:
+        return text
+    return _BRACKET_RE.sub(lambda m: _BRACKET_EQUIVALENTS[m.group(0)], text)
+
+
 def process_citations(answer_text: str, web_sources: List[Dict[str, str]], youtube_sources: List[Dict[str, str]]) -> Tuple[str, str, Dict[int, Dict[str, Union[str, int]]]]:
     """
     Processes the answer text to make citations clickable links and separates the answer from the sources section.
@@ -16,6 +37,8 @@ def process_citations(answer_text: str, web_sources: List[Dict[str, str]], youtu
         - The sources section of the answer text.
         - A dictionary mapping source numbers to their earliest timestamps (if available).
     """
+    answer_text = normalize_citation_brackets(answer_text)
+
     if "SOURCES:" in answer_text:
         main_answer: str = answer_text.split("SOURCES:")[0].strip()
         sources_section: str = "SOURCES:" + answer_text.split("SOURCES:")[1]
