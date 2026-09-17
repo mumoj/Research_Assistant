@@ -3,7 +3,7 @@ import sys
 import os
 import re
 from unittest.mock import patch, MagicMock
-from modules.citations import process_citations
+from modules.citations import process_citations, normalize_citation_brackets
 from modules.scraper import get_video_transcript, format_transcript_text
 
 # Add the parent directory to sys.path to import the app
@@ -81,3 +81,27 @@ class TestCitationParsing:
         total_seconds = minutes * 60 + seconds
         assert total_seconds == 90
         
+
+
+class TestCitationBracketNormalization:
+    """Citation glyphs vary by model; the links must survive the difference."""
+
+    WEB = [{"title": f"W{i}", "url": f"https://w{i}.test", "content": ""} for i in range(5)]
+
+    def test_cjk_brackets_become_links(self):
+        """Groq's gpt-oss models answer with 【3】 rather than [3]."""
+        answer, _, _ = process_citations("Weight loss 【3】.", self.WEB, [])
+        assert '<a href="https://w2.test"' in answer
+        assert "【" not in answer
+
+    def test_fullwidth_brackets_become_links(self):
+        answer, _, _ = process_citations("Blood pressure ［5］.", self.WEB, [])
+        assert '<a href="https://w4.test"' in answer
+
+    def test_ascii_brackets_are_unchanged(self):
+        answer, _, _ = process_citations("Plain [1].", self.WEB, [])
+        assert '<a href="https://w0.test"' in answer
+
+    def test_normalizer_leaves_ordinary_text_alone(self):
+        text = "No citations here, just prose (with parentheses)."
+        assert normalize_citation_brackets(text) == text

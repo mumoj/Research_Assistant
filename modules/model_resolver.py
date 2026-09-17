@@ -9,7 +9,7 @@ actually offers and demotes models that turn out not to work.
 import os
 import re
 from functools import lru_cache
-from typing import List, Optional, Set, Tuple
+from typing import FrozenSet, List, Optional, Set, Tuple
 
 import google.generativeai as genai
 
@@ -68,13 +68,26 @@ def mark_unavailable(model: str) -> None:
     _unavailable.add(_normalize(model))
 
 
+def is_unavailable(model: str) -> bool:
+    """True when this name has already proved uncallable for this key."""
+    return _normalize(model) in _unavailable
+
+
 def reset_unavailable() -> None:
     """Clear the runtime blocklist (used by tests)."""
     _unavailable.clear()
 
 
-def candidate_models(api_key: Optional[str] = None) -> List[str]:
-    """Every callable Gemini model for this key, best first."""
+def candidate_models(
+    api_key: Optional[str] = None,
+    skip: FrozenSet[str] = frozenset(),
+) -> List[str]:
+    """Every callable Gemini model for this key, best first.
+
+    ``skip`` holds names to pass over for this request only (a model that is
+    throttled right now but will be fine later), as opposed to ``_unavailable``,
+    which is the process-lifetime blocklist for models that never work.
+    """
     api_key = api_key or os.getenv("GEMINI_API_KEY")
     if not api_key:
         return []
@@ -87,13 +100,17 @@ def candidate_models(api_key: Optional[str] = None) -> List[str]:
     usable = [
         name for name in available
         if name not in _unavailable
+        and name not in skip
         and "gemini" in name
         and not any(marker in name for marker in _EXCLUDED_MARKERS)
     ]
     return sorted(usable, key=_rank, reverse=True)
 
 
-def resolve_gemini_model(api_key: Optional[str] = None) -> str:
+def resolve_gemini_model(
+    api_key: Optional[str] = None,
+    skip: FrozenSet[str] = frozenset(),
+) -> str:
     """Return the best Gemini model name that is callable with this key.
 
     ``GEMINI_MODEL`` pins a model explicitly when a deployment needs one; note
@@ -103,17 +120,17 @@ def resolve_gemini_model(api_key: Optional[str] = None) -> str:
     override = os.getenv("GEMINI_MODEL")
     if override:
         override = _normalize(override.strip())
-        if override not in _unavailable:
+        if override not in _unavailable and override not in skip:
             return override
 
-    candidates = candidate_models(api_key)
+    candidates = candidate_models(api_key, skip=skip)
     if candidates:
         return candidates[0]
 
     # Catalogue unreadable: step through the offline chain instead of pinning
     # a single name that may already be retired.
     for name in FALLBACK_GEMINI_MODELS:
-        if name not in _unavailable:
+        if name not in _unavailable and name not in skip:
             return name
     return ""
 
@@ -136,13 +153,61 @@ _BILLING_MARKERS = (
 def is_billing_gated(error: BaseException) -> bool:
     """Detect a model that needs billing this account has not enabled.
 
-    A plain 429 is deliberately NOT treated as billing-gated: that is transient
-    throttling, and switching models would mask it rather than fix it.
+    A genuine billing gate is a 403 PERMISSION_DENIED. A 429 is not one, even
+    though Gemini phrases free-tier exhaustion as "You exceeded your current
+    quota, please check your plan and billing details" -- that sentence matches
+    the billing markers word for word, which was enough to retire a perfectly
+    good model for the rest of the process the first time it got throttled.
+    Quota status therefore wins over the wording.
     """
     text = str(error).lower()
     if "403" in text or "permission_denied" in text:
         return True
+    if "429" in text or "resource_exhausted" in text:
+        return False
     return any(marker in text for marker in _BILLING_MARKERS)
+
+
+# Phrases meaning "this model is fine, it is just busy or out of quota now".
+_OVERLOAD_MARKERS = (
+    "resource_exhausted", "unavailable", "overloaded",
+    "high demand", "try again later", "rate limit",
+)
+
+
+def is_transient_overload(error: BaseException) -> bool:
+    """Detect per-model throttling (429) or server overload (503).
+
+    This is deliberately NOT folded into :func:`is_model_unusable`. An unusable
+    model is blocklisted for the life of the process; an overloaded one is only
+    stepped over for the current request, because free-tier quota is metered
+    per model and the same name works again minutes later.
+    """
+    text = str(error).lower()
+    if "429" in text or "503" in text:
+        return True
+    return any(marker in text for marker in _OVERLOAD_MARKERS)
+
+
+# Phrases meaning "this request does not fit this provider, and a sibling model
+# on the same provider will not fit it either".
+_TOO_LARGE_MARKERS = (
+    "request too large", "reduce your message size", "context_length_exceeded",
+    "too many tokens", "maximum context length", "tokens per minute",
+)
+
+
+def is_context_too_large(error: BaseException) -> bool:
+    """Detect a prompt the provider will not accept at any model size.
+
+    Groq's free tier caps at 8000 tokens per minute, so five long web sources
+    can exceed it outright. Stepping to another model on the same provider
+    cannot help; only a different provider can answer.
+    """
+    text = str(error).lower()
+    if "413" in text:
+        return True
+    return any(marker in text for marker in _TOO_LARGE_MARKERS)
 
 
 def is_model_unusable(error: BaseException) -> bool:
