@@ -2,7 +2,7 @@
 from typing import Dict, Any, List
 from langgraph.graph import StateGraph, END
 from .workflow_state import ResearchState, SearchResult, WebSource, YouTubeSource, ValidationResult
-from .llm_config import LLMConfig, ValidatorUnavailable
+from .llm_config import LLMConfig, ValidatorUnavailable, message_text
 from .model_resolver import is_model_unusable
 from .prompts import ANSWER_GENERATION_PROMPT, FACT_CHECK_PROMPT, ANSWER_REVISION_PROMPT, format_validation_response
 from . import search, scraper, citations
@@ -154,8 +154,7 @@ def validate_answer_node(state: ResearchState) -> Dict[str, Any]:
             answer=state["primary_answer"]
         )
         
-        response = validator_llm.invoke(validation_prompt)
-        validation_text = response.content if hasattr(response, 'content') else str(response)
+        validation_text = message_text(validator_llm.invoke(validation_prompt))
         
         validation_data = format_validation_response(validation_text)
         validation_result = ValidationResult(
@@ -213,8 +212,7 @@ def revise_answer_node(state: ResearchState) -> Dict[str, Any]:
             sources="\n".join(sources_text)
         )
         
-        response = validator_llm.invoke(revision_prompt)
-        revised_answer = response.content if hasattr(response, 'content') else str(response)
+        revised_answer = message_text(validator_llm.invoke(revision_prompt))
         
         return {
             "primary_answer": revised_answer,

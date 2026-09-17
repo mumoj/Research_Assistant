@@ -10,6 +10,29 @@ from . import model_resolver
 from .model_resolver import resolve_gemini_model
 
 
+def message_text(response) -> str:
+    """Flatten an LLM response to plain text.
+
+    Gemini 3.x returns ``content`` as a list of typed blocks (text plus
+    reasoning signatures) rather than a string. Passing that straight through
+    put a raw block dump in front of the reader and broke citation parsing,
+    which expects text.
+    """
+    content = getattr(response, "content", response)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str):
+                parts.append(block)
+            elif isinstance(block, dict) and block.get("type") == "text":
+                parts.append(block.get("text", ""))
+        if parts:
+            return "".join(parts)
+    return str(content)
+
+
 class ValidatorUnavailable(RuntimeError):
     """Raised when no validator provider has a usable API key configured."""
 
@@ -71,8 +94,7 @@ class LLMConfig:
             llm = LLMConfig.get_primary_llm()
             model_name = getattr(llm, "model", "")
             try:
-                response = llm.invoke(prompt)
-                return response.content if hasattr(response, "content") else str(response)
+                return message_text(llm.invoke(prompt))
             except Exception as exc:
                 if not model_resolver.is_model_unusable(exc):
                     raise
