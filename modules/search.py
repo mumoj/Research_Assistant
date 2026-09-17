@@ -7,6 +7,7 @@ try:
     from ddgs import DDGS
 except ImportError:  # pragma: no cover - fallback for older installs
     from duckduckgo_search import DDGS
+from concurrent.futures import ThreadPoolExecutor
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from typing import List
@@ -80,13 +81,29 @@ def search_with_serpapi(query: str, max_results: int = 5) -> List[SearchResult]:
     return results
 
 
+def _has_captions(video_id: str, api_key: str) -> bool:
+    """True when the video exposes a caption track.
+
+    Builds its own client: googleapiclient's service objects wrap a single
+    httplib2 instance that is not safe to share across threads.
+    """
+    try:
+        youtube = build('youtube', 'v3', developerKey=api_key, cache_discovery=False)
+        response = youtube.captions().list(part='snippet', videoId=video_id).execute()
+        return bool(response.get('items', []))
+    except HttpError:
+        # Caption check failed for this video; treat it as unusable rather than
+        # failing the whole search.
+        return False
+
+
 def search_youtube(query: str, max_results: int = 3) -> List[SearchResult]:
     """
     Searches YouTube using the YouTube Data API v3.
     Args:
         query: The search query.
         max_results: The maximum number of search results to return.
-        
+
     Returns:
         A list of dictionaries, where each dictionary represents a video
         and contains the 'id', 'title', and 'url'. Returns an empty list if
@@ -96,10 +113,11 @@ def search_youtube(query: str, max_results: int = 3) -> List[SearchResult]:
     if not youtube_api_key:
         st.error("YouTube API Key not found in environment variables")
         return []
-    
+
     try:
-        youtube = build('youtube', 'v3', developerKey=youtube_api_key)
-    
+        youtube = build('youtube', 'v3', developerKey=youtube_api_key,
+                        cache_discovery=False)
+
         # Call the search.list method to retrieve matching videos
         search_response = youtube.search().list(
             q=query,
@@ -107,37 +125,40 @@ def search_youtube(query: str, max_results: int = 3) -> List[SearchResult]:
             maxResults=max_results * 2,
             type='video'
         ).execute()
-    
+
+        candidates = [
+            item for item in search_response.get('items', [])
+            if item['id']['kind'] == 'youtube#video'
+        ]
+
+        # One captions.list round trip per video used to run strictly one after
+        # another. They are checked a batch at a time instead: concurrent within
+        # a batch for speed, but still stopping at the first batch that fills
+        # the quota, so this costs no more API units than the serial version did
+        # in the common case.
         videos: List[SearchResult] = []
-        for search_result in search_response.get('items', []):
-            if search_result['id']['kind'] == 'youtube#video':
-                video_id = search_result['id']['videoId']
-            
-            # Check if this video has captions/transcripts
-            try:
-                caption_response = youtube.captions().list(
-                    part='snippet',
-                    videoId=video_id
-                ).execute()
-                
-                # Only include videos that have captions
-                if caption_response.get('items', []):
-                    title = search_result['snippet']['title']
-                    video_url = f"https://www.youtube.com/watch?v={video_id}"
-                    
-                    videos.append(SearchResult(
-                        title=title,
-                        url=video_url,
-                        snippet=video_id
-                    ))
-                    
-                    if len(videos) >= max_results:
-                        break
-            except HttpError:
-                # Skip videos where caption check fails
-                continue
+        for start in range(0, len(candidates), max_results):
+            batch = candidates[start:start + max_results]
+            with ThreadPoolExecutor(max_workers=len(batch)) as pool:
+                captioned = list(pool.map(
+                    lambda item: _has_captions(item['id']['videoId'], youtube_api_key),
+                    batch
+                ))
+
+            # Order is preserved, so the most relevant videos still come first.
+            for item, has_captions in zip(batch, captioned):
+                if not has_captions:
+                    continue
+                video_id = item['id']['videoId']
+                videos.append(SearchResult(
+                    title=item['snippet']['title'],
+                    url=f"https://www.youtube.com/watch?v={video_id}",
+                    snippet=video_id
+                ))
+                if len(videos) >= max_results:
+                    return videos
+
         return videos
     except HttpError as e:
         st.error(f"Error searching YouTube: {str(e)}")
     return []
-
