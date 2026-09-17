@@ -262,3 +262,93 @@ class TestValidatorModelRetirement:
         with patch.object(LLMConfig, "get_validator_llm", return_value=failing):
             result = validate_answer_node(self.state())
         assert result["error_messages"], "real failures should still surface"
+
+
+class TestNoUnintendedSpend:
+    """Auto-detection must never start billing on its own."""
+
+    def test_stray_openai_key_is_not_auto_selected(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "o")
+        assert LLMConfig.detect_validator_provider() is None
+        with pytest.raises(ValidatorUnavailable):
+            LLMConfig.get_validator_llm()
+
+    def test_stray_anthropic_key_is_not_auto_selected(self, monkeypatch):
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "a")
+        assert LLMConfig.detect_validator_provider() is None
+
+    def test_free_provider_wins_over_paid_when_both_present(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "o")
+        monkeypatch.setenv("GROQ_API_KEY", "g")
+        assert LLMConfig.detect_validator_provider() == "groq"
+
+    def test_paid_provider_used_only_when_named_explicitly(self, monkeypatch):
+        monkeypatch.setenv("OPENAI_API_KEY", "o")
+        monkeypatch.setenv("VALIDATOR_PROVIDER", "openai")
+        assert LLMConfig.resolve_validator_provider() == "openai"
+
+    def test_groq_preferred_over_gemini_to_spare_gemini_quota(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "x")
+        monkeypatch.setenv("GROQ_API_KEY", "g")
+        assert LLMConfig.detect_validator_provider() == "groq"
+
+
+class TestBillingGateDetection:
+
+    BILLING_403 = ("403 PERMISSION_DENIED: Gemini API free tier is not available "
+                   "for this model. Please enable billing.")
+
+    def test_billing_gated_model_is_detected(self):
+        assert mr.is_billing_gated(Exception(self.BILLING_403))
+        assert mr.is_model_unusable(Exception(self.BILLING_403))
+
+    def test_transient_rate_limit_is_not_billing_gated(self):
+        """Switching models on a 429 would mask throttling instead of fixing it."""
+        err = Exception("429 RESOURCE_EXHAUSTED: rate limit exceeded, retry later")
+        assert not mr.is_billing_gated(err)
+        assert not mr.is_model_unusable(err)
+
+    def test_billing_gated_model_steps_down_to_free_one(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "fake")
+        calls = []
+
+        class FakeLLM:
+            def __init__(self, model):
+                self.model = model
+
+            def invoke(self, prompt):
+                calls.append(self.model)
+                if self.model == "gemini-3.8-flash":
+                    raise Exception(TestBillingGateDetection.BILLING_403)
+                result = MagicMock()
+                result.content = f"answer from {self.model}"
+                return result
+
+        listing, configure = catalogue("gemini-3.8-flash", "gemini-3.6-flash")
+        with listing, configure, patch.object(
+            LLMConfig, "get_primary_llm",
+            side_effect=lambda: FakeLLM(mr.resolve_gemini_model("fake"))
+        ):
+            answer = LLMConfig.invoke_primary("q")
+
+        assert answer == "answer from gemini-3.6-flash"
+        assert calls == ["gemini-3.8-flash", "gemini-3.6-flash"]
+
+    def test_rate_limit_does_not_burn_through_models(self, monkeypatch):
+        monkeypatch.setenv("GEMINI_API_KEY", "fake")
+        attempts = []
+
+        class ThrottledLLM:
+            model = "gemini-3.8-flash"
+
+            def invoke(self, prompt):
+                attempts.append(1)
+                raise Exception("429 RESOURCE_EXHAUSTED: rate limit exceeded")
+
+        listing, configure = catalogue("gemini-3.8-flash", "gemini-3.6-flash")
+        with listing, configure, patch.object(
+            LLMConfig, "get_primary_llm", return_value=ThrottledLLM()
+        ):
+            with pytest.raises(Exception, match="429"):
+                LLMConfig.invoke_primary("q")
+        assert len(attempts) == 1

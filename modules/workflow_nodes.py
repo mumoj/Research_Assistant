@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 from langgraph.graph import StateGraph, END
 from .workflow_state import ResearchState, SearchResult, WebSource, YouTubeSource, ValidationResult
 from .llm_config import LLMConfig, ValidatorUnavailable
-from .model_resolver import is_model_not_found
+from .model_resolver import is_model_unusable
 from .prompts import ANSWER_GENERATION_PROMPT, FACT_CHECK_PROMPT, ANSWER_REVISION_PROMPT, format_validation_response
 from . import search, scraper, citations
 
@@ -184,7 +184,7 @@ def validate_answer_node(state: ResearchState) -> Dict[str, Any]:
         }
         # A retired validator model is a config detail, not something the reader
         # of an answer needs warned about; the answer itself is unaffected.
-        if not is_model_not_found(e):
+        if not is_model_unusable(e):
             result["error_messages"] = state["error_messages"] + [f"Validation error: {str(e)}"]
         return result
 
