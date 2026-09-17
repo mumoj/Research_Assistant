@@ -4,7 +4,8 @@ from unittest.mock import patch, MagicMock
 
 import modules.model_resolver as mr
 from modules.llm_config import (
-    LLMConfig, ValidatorUnavailable, EmptyAnswer, message_text)
+    LLMConfig, ValidatorUnavailable, EmptyAnswer, message_text,
+    validation_enabled_default)
 from modules.workflow_nodes import validate_answer_node, revise_answer_node
 from modules.workflow_state import ValidationResult
 
@@ -13,6 +14,7 @@ KEY_VARS = [
     "GEMINI_API_KEY", "OPENAI_API_KEY", "GROQ_API_KEY", "ANTHROPIC_API_KEY",
     "VALIDATOR_PROVIDER", "VALIDATOR_MODEL", "GEMINI_MODEL",
     "PRIMARY_PROVIDER", "PRIMARY_MODEL", "GEMINI_THINKING_BUDGET",
+    "ENABLE_VALIDATION",
 ]
 
 
@@ -729,3 +731,37 @@ class TestCrossProviderFallback:
         with patch.object(LLMConfig, "get_primary_llm", return_value=dead):
             with pytest.raises(Exception, match="Request too large"):
                 LLMConfig.invoke_primary("q")
+
+
+class TestValidationToggleDefault:
+    """The sidebar toggle starts from ENABLE_VALIDATION, and starts off."""
+
+    def test_unset_means_off(self, monkeypatch):
+        monkeypatch.delenv("ENABLE_VALIDATION", raising=False)
+        assert validation_enabled_default() is False
+
+    @pytest.mark.parametrize("value", ["1", "true", "TRUE", "True", "yes", "on", " true "])
+    def test_truthy_values_turn_it_on(self, monkeypatch, value):
+        monkeypatch.setenv("ENABLE_VALIDATION", value)
+        assert validation_enabled_default() is True
+
+    @pytest.mark.parametrize("value", ["0", "false", "False", "no", "off", "", "   "])
+    def test_falsy_and_junk_values_stay_off(self, monkeypatch, value):
+        monkeypatch.setenv("ENABLE_VALIDATION", value)
+        assert validation_enabled_default() is False
+
+    def test_off_means_the_workflow_skips_the_validator(self, monkeypatch):
+        """With the toggle off, no validator is built even when a key exists."""
+        monkeypatch.setenv("GROQ_API_KEY", "g")
+        state = {
+            "search_config": {"enable_validation": False},
+            "primary_answer": "An answer [1].",
+            "web_sources": [], "youtube_sources": [], "error_messages": [],
+            "revision_count": 0, "max_revisions": 2,
+        }
+        with patch.object(LLMConfig, "get_validator_llm",
+                          side_effect=AssertionError("must not be called")):
+            result = validate_answer_node(state)
+        assert result["final_answer"] == "An answer [1]."
+        assert result["validation_result"] is None
+        assert result["needs_revision"] is False

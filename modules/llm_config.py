@@ -120,6 +120,20 @@ def _usable_model(skip: FrozenSet[str], *candidates: Optional[str]) -> Optional[
     return None
 
 
+_TRUTHY = ("1", "true", "yes", "on")
+
+
+def validation_enabled_default() -> bool:
+    """Initial state of the fact-check toggle, from ENABLE_VALIDATION.
+
+    Off unless the environment says otherwise. Validation costs an extra LLM
+    round trip per question, and on a shared free tier it draws on the same
+    per-minute token budget as the answer itself -- so it is opt-in rather
+    than something a first run pays for without asking.
+    """
+    return os.getenv("ENABLE_VALIDATION", "").strip().lower() in _TRUTHY
+
+
 def _thinking_budget() -> int:
     """Gemini reasoning budget, from GEMINI_THINKING_BUDGET."""
     raw = os.getenv("GEMINI_THINKING_BUDGET")
