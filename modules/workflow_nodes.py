@@ -3,6 +3,7 @@ from typing import Dict, Any, List
 from langgraph.graph import StateGraph, END
 from .workflow_state import ResearchState, SearchResult, WebSource, YouTubeSource, ValidationResult
 from .llm_config import LLMConfig, ValidatorUnavailable
+from .model_resolver import is_model_unusable
 from .prompts import ANSWER_GENERATION_PROMPT, FACT_CHECK_PROMPT, ANSWER_REVISION_PROMPT, format_validation_response
 from . import search, scraper, citations
 
@@ -92,8 +93,6 @@ def extract_youtube_content_node(state: ResearchState) -> Dict[str, Any]:
 def generate_answer_node(state: ResearchState) -> Dict[str, Any]:
     """Generate primary answer using sources."""
     try:
-        llm = LLMConfig.get_primary_llm()
-        
         # Prepare sources for prompt
         all_sources = []
         for i, source in enumerate(state["web_sources"], 1):
@@ -110,9 +109,8 @@ def generate_answer_node(state: ResearchState) -> Dict[str, Any]:
             sources=chr(10).join(all_sources)
         )
         
-        response = llm.invoke(prompt)
-        answer = response.content if hasattr(response, 'content') else str(response)
-        
+        answer = LLMConfig.invoke_primary(prompt)
+
         return {"primary_answer": answer}
     
     except Exception as e:
@@ -179,12 +177,16 @@ def validate_answer_node(state: ResearchState) -> Dict[str, Any]:
         }
     
     except Exception as e:
-        return {
+        result = {
             "validation_result": None,
             "final_answer": state["primary_answer"],
-            "needs_revision": False,
-            "error_messages": state["error_messages"] + [f"Validation error: {str(e)}"]
+            "needs_revision": False
         }
+        # A retired validator model is a config detail, not something the reader
+        # of an answer needs warned about; the answer itself is unaffected.
+        if not is_model_unusable(e):
+            result["error_messages"] = state["error_messages"] + [f"Validation error: {str(e)}"]
+        return result
 
 
 def revise_answer_node(state: ResearchState) -> Dict[str, Any]:
