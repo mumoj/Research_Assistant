@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from modules.workflow_nodes import create_workflow
 from modules.workflow_state import create_initial_state
-from modules.llm_config import LLMConfig
+from modules.llm_config import LLMConfig, validation_enabled_default
 from modules import citations
 from typing import Dict, Any
 import time
@@ -37,6 +37,17 @@ with st.sidebar:
     # Debug expandable section
     with st.expander("Debug Settings"):
         show_debug: bool = st.checkbox("Show Debug Info", value=False)
+        enable_validation: bool = st.checkbox(
+            "Fact-check the answer",
+            value=validation_enabled_default(),
+            help=(
+                "Runs a second model over the finished answer to check its "
+                "claims and citations against the sources, and revises the "
+                "answer if it finds problems. Off by default: it adds an LLM "
+                "round trip per question, and on a free tier it competes with "
+                "answer generation for the same per-minute token budget."
+            ),
+        )
         st.write("API Keys statuses:")
         config_status = LLMConfig.validate_config()
         for service, status in config_status.items():
@@ -57,7 +68,7 @@ if ask_button and question:
             "sources": search_sources,
             "max_web_results": 5,
             "max_youtube_results": 3,
-            "enable_validation": True,
+            "enable_validation": enable_validation,
             "confidence_threshold": 80
         }
         
