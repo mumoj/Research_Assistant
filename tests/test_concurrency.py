@@ -4,7 +4,8 @@ import time
 from unittest.mock import MagicMock, patch
 
 import modules.search as search
-from modules.workflow_nodes import extract_web_content_node
+from modules.workflow_nodes import (
+    extract_web_content_node, extract_youtube_content_node)
 from modules.workflow_state import SearchResult
 
 
@@ -136,3 +137,100 @@ class TestYouTubeCaptionChecks:
         with patch.object(search, "st") as ui:
             assert search.search_youtube("q") == []
         assert ui.error.called
+
+
+class TestFailedSourcesAreDropped:
+    """A failed fetch must not reach the model dressed up as source material.
+
+    Both extractors report failure in their return value instead of raising,
+    so the notice used to be stored as the source's content and handed to the
+    LLM as SOURCE n -- spending prompt budget on an error and letting the
+    model cite it.
+    """
+
+    def test_unfetchable_page_is_skipped_not_passed_through(self):
+        urls = ["https://ok.test", "https://dead.test"]
+        notice = "Error extracting content from https://dead.test: timed out"
+
+        def extract(url):
+            return notice if "dead" in url else "real article text"
+
+        s = state(urls)
+        with patch("modules.scraper.extract_web_content", side_effect=extract):
+            result = extract_web_content_node(s)
+
+        assert [x.url for x in result["web_sources"]] == ["https://ok.test"]
+        assert not any(notice in x.content for x in result["web_sources"])
+        assert any("dead.test" in m for m in s["error_messages"])
+
+    def test_blank_page_is_skipped(self):
+        s = state(["https://empty.test"])
+        with patch("modules.scraper.extract_web_content", return_value="   "):
+            result = extract_web_content_node(s)
+        assert result["web_sources"] == []
+        assert s["error_messages"]
+
+    def test_good_pages_survive_a_failing_neighbour(self):
+        urls = ["https://a.test", "https://bad.test", "https://b.test"]
+
+        def extract(url):
+            if "bad" in url:
+                return "Error extracting content from https://bad.test: 403"
+            return "content"
+
+        s = state(urls)
+        with patch("modules.scraper.extract_web_content", side_effect=extract):
+            result = extract_web_content_node(s)
+        assert [x.url for x in result["web_sources"]] == ["https://a.test", "https://b.test"]
+
+
+class TestTranscriptFailuresAreDropped:
+
+    # Verbatim from the live API when YouTube IP-blocks transcript fetches.
+    BLOCKED = ("Error getting transcript: \nCould not retrieve a transcript for "
+               "the video https://www.youtube.com/watch?v=x! This is most likely "
+               "caused by:\n\nYouTube is blocking requests from your IP.")
+
+    def yt_state(self, ids):
+        return {
+            "youtube_results": [
+                SearchResult(title=f"V{v}", url=f"https://youtu.be/{v}", snippet=v)
+                for v in ids
+            ],
+            "error_messages": [],
+        }
+
+    def test_ip_blocked_transcript_does_not_become_the_source(self):
+        s = self.yt_state(["vid1"])
+        with patch("modules.scraper.get_video_transcript", return_value=self.BLOCKED):
+            result = extract_youtube_content_node(s)
+
+        assert result["youtube_sources"] == []
+        assert any("No transcript" in m and "vid1" in m for m in s["error_messages"])
+        # The warning is one readable line, not the whole multi-line dump.
+        assert "\n" not in s["error_messages"][0]
+
+    def test_empty_transcript_is_skipped(self):
+        s = self.yt_state(["vid1"])
+        with patch("modules.scraper.get_video_transcript", return_value=[]):
+            result = extract_youtube_content_node(s)
+        assert result["youtube_sources"] == []
+
+    def test_usable_transcript_still_kept(self):
+        segs = [{"text": "hello", "start": 1.0, "timestamp": "00:01",
+                 "timestamp_seconds": 1.0}]
+        s = self.yt_state(["vid1"])
+        with patch("modules.scraper.get_video_transcript", return_value=segs):
+            result = extract_youtube_content_node(s)
+        assert len(result["youtube_sources"]) == 1
+        assert "[00:01] hello" in result["youtube_sources"][0].transcript_text
+        assert s["error_messages"] == []
+
+    def test_one_bad_video_does_not_drop_a_good_one(self):
+        segs = [{"text": "ok", "start": 0.0, "timestamp": "00:00",
+                 "timestamp_seconds": 0.0}]
+        s = self.yt_state(["bad", "good"])
+        with patch("modules.scraper.get_video_transcript",
+                   side_effect=lambda v: self.BLOCKED if v == "bad" else segs):
+            result = extract_youtube_content_node(s)
+        assert [x.id for x in result["youtube_sources"]] == ["good"]

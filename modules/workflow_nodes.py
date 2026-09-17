@@ -9,6 +9,12 @@ from .prompts import ANSWER_GENERATION_PROMPT, FACT_CHECK_PROMPT, ANSWER_REVISIO
 from . import search, scraper, citations
 
 
+def _short_reason(message: str, limit: int = 140) -> str:
+    """Condense a multi-line extraction failure into one readable line."""
+    collapsed = " ".join(str(message).split())
+    return collapsed if len(collapsed) <= limit else collapsed[:limit].rstrip() + "..."
+
+
 def _safe(fn):
     """Return the exception instead of raising, so one bad source is skipped.
 
@@ -80,10 +86,18 @@ def extract_web_content_node(state: ResearchState) -> Dict[str, Any]:
         for result, outcome in zip(results, pool.map(_safe(fetch), results)):
             if isinstance(outcome, BaseException):
                 state["error_messages"].append(
-                    f"Error extracting {result.url}: {str(outcome)}"
+                    f"Error extracting {result.url}: {_short_reason(outcome)}"
                 )
                 continue
             _, content = outcome
+            # A page that could not be fetched reports the failure in its
+            # return value. Keeping it would hand the model an error notice
+            # as though it were the article, and spend prompt budget on it.
+            if scraper.is_extraction_error(content) or not content.strip():
+                state["error_messages"].append(
+                    f"Skipped {result.url}: {_short_reason(content)}"
+                )
+                continue
             web_sources.append(WebSource(
                 title=result.title,
                 url=result.url,
@@ -101,19 +115,23 @@ def extract_youtube_content_node(state: ResearchState) -> Dict[str, Any]:
         try:
             video_id = result.snippet  # stored in snippet field
             transcript = scraper.get_video_transcript(video_id)
-            
-            if isinstance(transcript, list):
-                transcript_text = scraper.format_transcript_text(transcript)
-            else:
-                transcript_text = transcript  # error message
-                transcript = []
-            
+
+            # get_video_transcript returns the failure as a string rather than
+            # raising. Carrying that through made the error message itself the
+            # video's "transcript", so the model was asked to answer from
+            # "YouTube is blocking requests from your IP" and could cite it.
+            if not isinstance(transcript, list) or not transcript:
+                state["error_messages"].append(
+                    f"No transcript for {result.url}: {_short_reason(transcript)}"
+                )
+                continue
+
             youtube_sources.append(YouTubeSource(
                 id=video_id,
                 title=result.title,
                 url=result.url,
                 transcript=transcript,
-                transcript_text=transcript_text
+                transcript_text=scraper.format_transcript_text(transcript)
             ))
         except Exception as e:
             state["error_messages"].append(f"Error extracting {result.url}: {str(e)}")
