@@ -2,7 +2,7 @@
 from typing import Dict, Any, List
 from langgraph.graph import StateGraph, END
 from .workflow_state import ResearchState, SearchResult, WebSource, YouTubeSource, ValidationResult
-from .llm_config import LLMConfig
+from .llm_config import LLMConfig, ValidatorUnavailable
 from .prompts import ANSWER_GENERATION_PROMPT, FACT_CHECK_PROMPT, ANSWER_REVISION_PROMPT, format_validation_response
 from . import search, scraper, citations
 
@@ -133,7 +133,16 @@ def validate_answer_node(state: ResearchState) -> Dict[str, Any]:
     
     try:
         validator_llm = LLMConfig.get_validator_llm()
-        
+    except ValidatorUnavailable:
+        # No validator key is configured. Ship the primary answer unvalidated
+        # instead of failing the run with a missing-key error.
+        return {
+            "validation_result": None,
+            "final_answer": state["primary_answer"],
+            "needs_revision": False
+        }
+
+    try:
         # Prepare sources for validation
         sources_text = []
         for source in state["web_sources"]:
@@ -182,7 +191,13 @@ def revise_answer_node(state: ResearchState) -> Dict[str, Any]:
     """Revise answer based on validation feedback."""
     try:
         validator_llm = LLMConfig.get_validator_llm()
-        
+    except ValidatorUnavailable:
+        return {
+            "primary_answer": state["primary_answer"],
+            "needs_revision": False
+        }
+
+    try:
         # Prepare sources for revision
         sources_text = []
         for source in state["web_sources"]:
