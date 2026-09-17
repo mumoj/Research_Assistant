@@ -1,7 +1,12 @@
 import streamlit as st
 import requests
 import os
-from duckduckgo_search import DDGS
+try:
+    # duckduckgo_search was renamed to ddgs; the old package still imports but
+    # silently returns zero results, which left the app with no web sources.
+    from ddgs import DDGS
+except ImportError:  # pragma: no cover - fallback for older installs
+    from duckduckgo_search import DDGS
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from typing import List
@@ -18,25 +23,27 @@ def search_web(query: str, max_results: int = 5) -> List[SearchResult]:
     Returns:
         List of dictionaries containing search results
     """
+    results: List[SearchResult] = []
     try:
-        results: List[SearchResult] = []
-        with DDGS() as ddgs:
-            search_results = list(ddgs.text(query, max_results=max_results))
-        
-            for result in search_results:
-                results.append(SearchResult(
-                    title=result.get("title", "No title"),
-                    url=result.get("href", ""),
-                    snippet=result.get("body", "No snippet")
-                ))
-        return results
-    
+        for result in DDGS().text(query, max_results=max_results):
+            results.append(SearchResult(
+                title=result.get("title", "No title"),
+                url=result.get("href", ""),
+                snippet=result.get("body", "No snippet")
+            ))
     except Exception as e:
-        try:
-            return search_with_serpapi(query, max_results)
-        except Exception as e:
-            st.error(f"SerpAPI search failed: {str(e)}")
-            return []
+        st.error(f"DuckDuckGo search failed: {str(e)}")
+
+    if results:
+        return results
+
+    # An empty result set is a failure too, not just an exception - a silently
+    # empty search is what left answers with no sources at all.
+    try:
+        return search_with_serpapi(query, max_results)
+    except Exception as e:
+        st.error(f"SerpAPI search failed: {str(e)}")
+        return []
     
 def search_with_serpapi(query: str, max_results: int = 5) -> List[SearchResult]:
     """
