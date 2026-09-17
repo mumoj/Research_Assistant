@@ -11,6 +11,16 @@ from .workflow_state import YouTubeSource, WebSource
 # match the BeautifulSoup fallback below.
 SCRAPE_TIMEOUT_SECONDS = 10
 
+# extract_web_content reports failure in its return value rather than raising,
+# so callers need a way to tell a failed fetch from real page text. Without it
+# the notice below gets handed to the model as though it were the source.
+WEB_EXTRACTION_ERROR_PREFIX = "Error extracting content from"
+
+
+def is_extraction_error(text) -> bool:
+    """True when extract_web_content returned a failure notice, not content."""
+    return isinstance(text, str) and text.startswith(WEB_EXTRACTION_ERROR_PREFIX)
+
 
 def _scrape_config() -> "newspaper.Config":
     config = newspaper.Config()
@@ -55,7 +65,7 @@ def extract_web_content(url: str) -> str:
             text = text[:32000] + "..."
         return text
     except Exception as e:
-        return f"Error extracting content from {url}: {str(e)}"
+        return f"{WEB_EXTRACTION_ERROR_PREFIX} {url}: {str(e)}"
 
 def _fetch_raw_transcript(video_id: str) -> List[dict]:
     """Fetch a transcript as a list of ``{text, start, duration}`` dicts.
