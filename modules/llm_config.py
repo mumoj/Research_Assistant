@@ -6,6 +6,7 @@ from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_core.language_models import BaseLanguageModel
 
+from . import model_resolver
 from .model_resolver import resolve_gemini_model
 
 
@@ -16,9 +17,13 @@ class ValidatorUnavailable(RuntimeError):
 # (provider, env var holding its key, default model). The order is also the
 # auto-detection preference when the configured provider has no key.
 # A default model of None means "resolve it at runtime".
+#
+# Validation is a deterministic, high-volume fact-check, so each default is that
+# provider's cheap/fast tier rather than its flagship. Checked against provider
+# docs on 2026-09-17 - see get_available_providers for the current alternatives.
 VALIDATOR_PROVIDERS: List[Tuple[str, str, Optional[str]]] = [
-    ("openai", "OPENAI_API_KEY", "gpt-4o-mini"),
-    ("groq", "GROQ_API_KEY", "llama-3.3-70b-versatile"),
+    ("openai", "OPENAI_API_KEY", "gpt-5.6-luna"),
+    ("groq", "GROQ_API_KEY", "openai/gpt-oss-120b"),
     ("anthropic", "ANTHROPIC_API_KEY", "claude-haiku-4-5-20251001"),
     ("gemini", "GEMINI_API_KEY", None),
 ]
@@ -44,6 +49,33 @@ class LLMConfig:
             max_tokens=1500,
             google_api_key=gemini_api_key
         )
+
+    @staticmethod
+    def invoke_primary(prompt: str, max_attempts: int = 3) -> str:
+        """Call the primary LLM, stepping to the next model on a 404.
+
+        The catalogue advertises models that a given key cannot actually call
+        ("no longer available to new users"), so a successful call is the only
+        real proof a model works. On a not-found error we blocklist that name
+        and retry with the next-best candidate rather than failing the search.
+        """
+        last_error: Optional[BaseException] = None
+
+        for _ in range(max_attempts):
+            llm = LLMConfig.get_primary_llm()
+            model_name = getattr(llm, "model", "")
+            try:
+                response = llm.invoke(prompt)
+                return response.content if hasattr(response, "content") else str(response)
+            except Exception as exc:
+                if not model_resolver.is_model_not_found(exc):
+                    raise
+                last_error = exc
+                if not model_name:
+                    break
+                model_resolver.mark_unavailable(model_name)
+
+        raise last_error if last_error else RuntimeError("No usable Gemini model")
 
     @staticmethod
     def detect_validator_provider() -> Optional[str]:
@@ -121,10 +153,10 @@ class LLMConfig:
     def get_available_providers() -> Dict[str, list]:
         """Get list of available providers and their models."""
         return {
-            "openai": ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini"],
-            "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-4-5", "claude-opus-4-1"],
-            "gemini": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"],
-            "groq": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it"]
+            "openai": ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-astra"],
+            "anthropic": ["claude-haiku-4-5-20251001", "claude-sonnet-5", "claude-opus-5"],
+            "gemini": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash"],
+            "groq": ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"]
         }
 
     @staticmethod
